@@ -1,0 +1,11 @@
+{
+  "id": "example-plugin",
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "description": "A template plugin for the SAP Developer Portal",
+  "author": "Your Name",
+  "bundleUrl": "https://your-cdn.com/plugins/example-plugin/v1.0.0/plugin.js",
+  "thumbnail": "https://your-cdn.com/plugins/example-plugin/thumbnail.png",
+  "tags": ["example", "template"],
+  "minPortalVersion": "1.0.0"
+}

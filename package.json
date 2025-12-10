@@ -1,0 +1,18 @@
+{
+  "name": "developer-portal-plugins",
+  "version": "1.0.0",
+  "description": "Plugin system for SAP Developer Portal",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "postinstall": "npm run build --workspace=packages/plugin-sdk"
+  },
+  "keywords": ["plugin", "developer-portal", "sap"],
+  "author": "CFS Platform Engineering"
+}

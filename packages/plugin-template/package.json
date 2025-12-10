@@ -1,0 +1,29 @@
+{
+  "name": "@sap-developer-portal/plugin-template",
+  "version": "1.0.0",
+  "description": "Template for creating SAP Developer Portal plugins",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "dev": "node esbuild.config.js --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "plugin",
+    "template"
+  ],
+  "author": "CFS Platform Engineering",
+  "dependencies": {
+    "@sap-developer-portal/plugin-sdk": "*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.19.12",
+    "typescript": "^5.9.3"
+  },
+  "main": "esbuild.config.js",
+  "license": "ISC"
+}
