@@ -7,9 +7,9 @@ Complete guide for developing plugins for the SAP Developer Portal.
 - [Getting Started](#getting-started)
 - [Plugin Architecture](#plugin-architecture)
 - [Development Workflow](#development-workflow)
+- [Testing Your Plugin](#testing-your-plugin)
 - [Plugin Context](#plugin-context)
 - [Building Your Plugin](#building-your-plugin)
-- [Testing](#testing)
 - [Publishing](#publishing)
 - [Best Practices](#best-practices)
 - [Troubleshooting](#troubleshooting)
@@ -92,15 +92,80 @@ my-plugin/
 
 ### Entry Point
 
-Your plugin must default export a React component:
+Your plugin must export a default object with `component`, `metadata`, and optional `hooks`:
 ```typescript
-import { createPlugin } from '@sap-developer-portal/plugin-sdk';
+// Access React from global scope
+/// <reference types="react" />
+declare const React: any;
 
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
+  const { useState } = React;
+  
   return <div>Hello World!</div>;
-});
+};
 
-export default MyPlugin;
+// Export in the expected format
+export default {
+  component: MyPlugin,
+  metadata: {
+    name: 'my-plugin',
+    version: '1.0.0',
+    author: 'Your Name',
+  },
+  hooks: {
+    onMount() {
+      console.log('[My Plugin] mounted');
+    },
+    onUnmount() {
+      console.log('[My Plugin] unmounted');
+    },
+  },
+};
+```
+
+### Important: React Global Access
+
+**CRITICAL:** Your plugin must access React from the global scope (`window.React`), not via imports. The portal provides React globally.
+
+**DO THIS:**
+```typescript
+/// <reference types="react" />
+declare const React: any;
+
+const MyPlugin = ({ context }) => {
+  const { useState } = React;
+  // ...
+};
+```
+
+**DON'T DO THIS:**
+```typescript
+import React, { useState } from 'react';  // ❌ Will cause errors!
+```
+
+### Build Configuration
+
+Your `tsconfig.json` should use classic JSX transform:
+```json
+{
+  "compilerOptions": {
+    "jsx": "react",  // Use "react", NOT "react-jsx"
+    // ... other settings
+  }
+}
+```
+
+Your `esbuild.config.js` should configure React as a global:
+```javascript
+const config = {
+  // ...
+  jsx: 'transform',
+  jsxFactory: 'React.createElement',
+  jsxFragment: 'React.Fragment',
+  banner: {
+    js: `// My Plugin\nconst React = window.React;\n`
+  }
+};
 ```
 
 ### Plugin Manifest
@@ -131,23 +196,214 @@ npm run dev
 
 This watches for file changes and rebuilds automatically.
 
-### 2. Local Testing
+### 2. Build for Testing
 
-To test your plugin locally in the portal:
-
-1. Build your plugin: `npm run build`
-2. Copy `dist/plugin.js` to a local web server
-3. Update `plugin.manifest.json` with the local URL
-4. Use the portal's "Load Local Plugin" feature
-
-### 3. Production Build
-
-Build optimized bundle:
+Build your plugin bundle:
 ```bash
 npm run build
 ```
 
-Output: `dist/plugin.js` (minified, with source maps)
+This creates `dist/plugin.js` - your complete plugin bundle.
+
+## Testing Your Plugin
+
+### Step 1: Serve Your Plugin Bundle
+
+After building your plugin, you need to make it accessible via HTTP. You have several options:
+
+#### Option A: Using Node.js http-server (With CORS)
+```bash
+# Install http-server globally (one-time)
+npm install -g http-server
+
+# Navigate to dist directory
+cd dist
+
+# Start server with CORS enabled
+http-server -p 8000 --cors
+
+# Output:
+# Starting up http-server, serving ./
+# Available on:
+#   http://127.0.0.1:8000
+#   http://192.168.x.x:8000
+```
+
+**Note:** The `--cors` flag is important - it allows the portal to load your plugin from a different origin.
+
+#### Option B: Using npx (No Installation)
+```bash
+cd dist
+npx http-server -p 8000 --cors
+```
+
+#### Option C: Using Your Machine's IP (For Testing on Other Devices)
+
+If you want to test on another machine or device on the same network:
+```bash
+# Find your IP address
+# On macOS/Linux:
+ifconfig | grep "inet "
+# On Windows:
+ipconfig
+
+# Start server
+cd dist
+http-server -p 8000 --cors
+
+# Your plugin will be available at:
+# http://YOUR_IP_ADDRESS:8000/plugin.js
+# Example: http://10.26.182.201:8000/plugin.js
+```
+
+### Step 2: Test in the Portal
+
+1. **Open the Developer Portal** in your browser:
+```
+   http://localhost:3000/plugins
+```
+
+2. **Use the "Test Your Plugin" Section:**
+   - Find the "Test Your Plugin" card at the top of the page
+   - Enter your plugin bundle URL in the input field:
+```
+     http://localhost:8000/plugin.js
+```
+     Or if using your IP:
+```
+     http://10.26.182.201:8000/plugin.js
+```
+
+3. **Click "Load Plugin"**
+   - Your plugin should load and render in the preview area below
+   - Check the browser console for any errors
+
+4. **Verify Plugin Functionality:**
+   - Test all interactive features
+   - Switch between light/dark themes to test theme support
+   - Check that API calls work (if your plugin makes any)
+   - Verify error handling
+
+### Step 3: Development Iteration
+
+For rapid development with hot reload:
+
+**Terminal 1 - Watch Mode:**
+```bash
+cd my-awesome-plugin
+npm run dev
+```
+
+**Terminal 2 - Serve Bundle:**
+```bash
+cd my-awesome-plugin/dist
+http-server -p 8000 --cors
+```
+
+**Browser - Portal:**
+1. Make changes to `src/index.tsx`
+2. Watch mode automatically rebuilds
+3. In the portal, click "Clear" then "Load Plugin" again
+4. Or simply refresh the browser page
+
+### Common Testing Scenarios
+
+#### Testing on localhost
+```bash
+# Build plugin
+npm run build
+
+# Serve from dist directory
+cd dist
+http-server -p 8000 --cors
+
+# In portal, enter:
+http://localhost:8000/plugin.js
+```
+
+#### Testing across network (e.g., from a VM or another computer)
+```bash
+# Find your IP (example: 10.26.182.201)
+ifconfig | grep "inet "
+
+# Serve bundle
+cd dist
+http-server -p 8000 --cors
+
+# In portal, enter:
+http://10.26.182.201:8000/plugin.js
+```
+
+#### Testing with different ports
+
+If port 8000 is busy:
+```bash
+# Use a different port
+http-server -p 3001 --cors
+
+# In portal, enter:
+http://localhost:3001/plugin.js
+```
+
+### Troubleshooting Testing Issues
+
+**Problem: CORS Error**
+```
+Access to fetch at 'http://localhost:8000/plugin.js' from origin 'http://localhost:3000' 
+has been blocked by CORS policy
+```
+
+**Solution:** Make sure you're using the `--cors` flag:
+```bash
+http-server -p 8000 --cors
+```
+
+**Problem: Plugin Not Loading**
+
+**Solution:** Check:
+1. Server is still running (check the terminal)
+2. URL is correct (try opening in a new browser tab)
+3. Build completed successfully (`dist/plugin.js` exists)
+4. Browser console for specific error messages
+
+**Problem: Changes Not Reflecting**
+
+**Solution:**
+1. Verify watch mode is running and rebuilding
+2. Click "Clear" then "Load Plugin" again in portal
+3. Or do a hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
+4. Check that the server is serving the latest `dist/plugin.js`
+
+**Problem: "React is not defined"**
+
+**Solution:** You're likely importing React instead of using the global. Check your code:
+```typescript
+// ❌ Wrong
+import React from 'react';
+
+// ✅ Correct
+declare const React: any;
+```
+
+### Verifying Your Bundle
+
+Before testing in the portal, verify your bundle is accessible:
+```bash
+# Test with curl
+curl http://localhost:8000/plugin.js | head -n 10
+
+# Should show JavaScript code starting with:
+# // My Plugin
+# const React = window.React;
+# ...
+```
+
+Or open in browser:
+```
+http://localhost:8000/plugin.js
+```
+
+You should see the JavaScript bundle content.
 
 ## Plugin Context
 
@@ -156,10 +412,14 @@ Every plugin receives a `context` object with portal integration:
 ### Context Structure
 ```typescript
 interface PluginContext {
-  theme: 'light' | 'dark';           // Current portal theme
-  apiClient: ApiClient;               // HTTP client for API calls
-  metadata: PluginMetadata;           // Your plugin's metadata
-  utils: PluginUtils;                 // Utility functions
+  theme: {
+    mode: 'light' | 'dark';
+    primaryColor: string;
+    colors: { ... };
+  };
+  apiClient: ApiClient;
+  metadata: PluginMetadata;
+  utils: PluginUtils;
 }
 ```
 
@@ -167,25 +427,30 @@ interface PluginContext {
 
 Access the current theme:
 ```typescript
-const MyPlugin = createPlugin(({ context }) => {
-  const isDark = context.theme === 'dark';
+const MyPlugin = ({ context }) => {
+  const { useState } = React;
+  const { theme } = context;
+  
+  // Theme is an object, not a string
+  const themeMode = theme?.mode || 'light';
+  const isDark = themeMode === 'dark';
   
   return (
     <div className={isDark ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}>
       Content
     </div>
   );
-});
+};
 ```
 
 ### API Client
 
-Make authenticated API calls:
+Make authenticated API calls to **your portal's backend**:
 ```typescript
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
   const fetchData = async () => {
     try {
-      // GET request
+      // This calls YOUR portal's backend
       const data = await context.apiClient.get('/api/items');
       
       // POST request
@@ -193,21 +458,30 @@ const MyPlugin = createPlugin(({ context }) => {
         name: 'New Item'
       });
       
-      // PUT, DELETE, PATCH also available
     } catch (error) {
       console.error('API error:', error);
     }
   };
   
   return <button onClick={fetchData}>Fetch Data</button>;
-});
+};
+```
+
+**Important:** `context.apiClient` is for calling **your portal's backend APIs**, not external APIs. For external APIs, use standard `fetch()`:
+```typescript
+// External API - use fetch directly
+const response = await fetch('https://api.example.com/data');
+const data = await response.json();
+
+// Portal backend - use context.apiClient
+const data = await context.apiClient.get('/api/portal-data');
 ```
 
 ### Utilities
 
 Use portal utilities:
 ```typescript
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
   const handleAction = () => {
     // Show toast notification
     context.utils.toast('Action successful!', 'success');
@@ -220,93 +494,40 @@ const MyPlugin = createPlugin(({ context }) => {
   };
   
   return <button onClick={handleAction}>Do Something</button>;
-});
+};
 ```
 
 ### Metadata
 
 Access your plugin's metadata:
 ```typescript
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
   return (
     <div>
-      <h1>{context.metadata.name}</h1>
+      <h1>{context.metadata.title || context.metadata.name}</h1>
       <p>Version: {context.metadata.version}</p>
       <p>ID: {context.metadata.id}</p>
     </div>
   );
-});
+};
 ```
 
 ## Building Your Plugin
-
-### Using SDK Hooks
-
-The SDK provides React hooks for common patterns:
-
-#### usePluginData - Fetch Data
-```typescript
-import { createPlugin, usePluginData } from '@sap-developer-portal/plugin-sdk';
-
-const MyPlugin = createPlugin(({ context }) => {
-  const { data, loading, error } = usePluginData(
-    '/api/items',
-    context.apiClient,
-    {
-      enabled: true,                    // Enable/disable fetching
-      refetchInterval: 30000            // Refetch every 30s (optional)
-    }
-  );
-  
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-  
-  return <div>{JSON.stringify(data)}</div>;
-});
-```
-
-#### usePluginTheme - Access Theme
-```typescript
-import { createPlugin, usePluginTheme } from '@sap-developer-portal/plugin-sdk';
-
-const MyPlugin = createPlugin(({ context }) => {
-  const theme = usePluginTheme(context);
-  
-  return <div>Current theme: {theme}</div>;
-});
-```
-
-#### usePluginAsync - Async Operations
-```typescript
-import { createPlugin, usePluginAsync } from '@sap-developer-portal/plugin-sdk';
-
-const MyPlugin = createPlugin(({ context }) => {
-  const { execute, loading, error } = usePluginAsync(async (itemId: string) => {
-    return await context.apiClient.post('/api/items', { id: itemId });
-  });
-  
-  return (
-    <button onClick={() => execute('123')} disabled={loading}>
-      {loading ? 'Saving...' : 'Save Item'}
-    </button>
-  );
-});
-```
 
 ### State Management
 
 Use standard React hooks for state:
 ```typescript
-import { useState, useEffect } from 'react';
-import { createPlugin } from '@sap-developer-portal/plugin-sdk';
-
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
+  const { useState, useEffect } = React;
   const [count, setCount] = useState(0);
   const [items, setItems] = useState([]);
   
   useEffect(() => {
     // Fetch items on mount
-    context.apiClient.get('/api/items').then(setItems);
+    fetch('https://api.example.com/items')
+      .then(res => res.json())
+      .then(setItems);
   }, []);
   
   return (
@@ -318,7 +539,7 @@ const MyPlugin = createPlugin(({ context }) => {
       </ul>
     </div>
   );
-});
+};
 ```
 
 ### Styling
@@ -328,8 +549,9 @@ You can use:
 - **Inline styles**
 - **CSS-in-JS** libraries (if bundled)
 ```typescript
-const MyPlugin = createPlugin(({ context }) => {
-  const isDark = context.theme === 'dark';
+const MyPlugin = ({ context }) => {
+  const themeMode = context.theme?.mode || 'light';
+  const isDark = themeMode === 'dark';
   
   return (
     <div className="p-6 rounded-lg shadow-lg">
@@ -343,23 +565,21 @@ const MyPlugin = createPlugin(({ context }) => {
       </button>
     </div>
   );
-});
+};
 ```
 
 ### Error Handling
 
 Always handle errors gracefully:
 ```typescript
-import { createPlugin } from '@sap-developer-portal/plugin-sdk';
-import { useState } from 'react';
-
-const MyPlugin = createPlugin(({ context }) => {
+const MyPlugin = ({ context }) => {
+  const { useState } = React;
   const [error, setError] = useState(null);
   
   const handleAction = async () => {
     try {
       setError(null);
-      await context.apiClient.post('/api/action');
+      await fetch('https://api.example.com/action');
       context.utils.toast('Success!', 'success');
     } catch (err) {
       setError(err.message);
@@ -377,60 +597,8 @@ const MyPlugin = createPlugin(({ context }) => {
       <button onClick={handleAction}>Do Action</button>
     </div>
   );
-});
-```
-
-## Testing
-
-### Local Testing
-
-1. **Mock Context** for unit tests:
-```typescript
-// test-utils.tsx
-import { PluginContext } from '@sap-developer-portal/plugin-sdk';
-
-export const mockContext: PluginContext = {
-  theme: 'light',
-  apiClient: {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-    patch: jest.fn(),
-  },
-  metadata: {
-    id: 'test-plugin',
-    name: 'Test Plugin',
-    version: '1.0.0',
-  },
-  utils: {
-    toast: jest.fn(),
-    navigate: jest.fn(),
-    openExternal: jest.fn(),
-  },
 };
 ```
-
-2. **Test Component:**
-```typescript
-// MyPlugin.test.tsx
-import { render, screen } from '@testing-library/react';
-import MyPlugin from './index';
-import { mockContext } from './test-utils';
-
-test('renders plugin', () => {
-  render(<MyPlugin context={mockContext} />);
-  expect(screen.getByText('Test Plugin')).toBeInTheDocument();
-});
-```
-
-### Integration Testing
-
-Test in the actual portal:
-1. Build plugin: `npm run build`
-2. Upload to test CDN
-3. Load in portal's staging environment
-4. Verify functionality
 
 ## Publishing
 
@@ -480,7 +648,7 @@ Update `plugin.manifest.json` with the final URL:
 
 ### 5. Register Plugin
 
-Submit your plugin manifest to the portal registry (process TBD).
+Submit your plugin manifest to the portal registry (contact portal administrators for the registration process).
 
 ## Best Practices
 
@@ -488,8 +656,8 @@ Submit your plugin manifest to the portal registry (process TBD).
 
 1. **Keep bundles small:**
    - Avoid large dependencies
+   - The bundle should be under 500KB ideally
    - Use tree-shaking
-   - Lazy load heavy components
 
 2. **Optimize API calls:**
    - Cache responses when appropriate
@@ -506,7 +674,7 @@ Submit your plugin manifest to the portal registry (process TBD).
 1. **Never hardcode secrets:**
    - No API keys in code
    - Use environment variables for development
-   - Rely on portal's API client for authentication
+   - Rely on portal's API client for authentication to portal backend
 
 2. **Validate user input:**
    - Sanitize form inputs
@@ -516,7 +684,7 @@ Submit your plugin manifest to the portal registry (process TBD).
 3. **CORS and CSP:**
    - Only fetch from allowed domains
    - Portal enforces Content Security Policy
-   - Test CORS issues early
+   - Test CORS issues early during development
 
 ### User Experience
 
@@ -541,11 +709,11 @@ Submit your plugin manifest to the portal registry (process TBD).
 1. **TypeScript:**
    - Use strict mode
    - Define proper types
-   - Avoid `any` type
+   - Avoid `any` type when possible
 
 2. **Code organization:**
    - Keep components small and focused
-   - Extract reusable logic to hooks
+   - Extract reusable logic to functions
    - Use meaningful names
 
 3. **Comments:**
@@ -561,10 +729,10 @@ Submit your plugin manifest to the portal registry (process TBD).
 
 **Solutions:**
 1. Check browser console for errors
-2. Verify `bundleUrl` is correct and accessible
-3. Check CORS headers on your CDN
-4. Ensure bundle is valid ES module
-5. Verify manifest JSON is valid
+2. Verify `bundleUrl` is correct and accessible (open in new tab)
+3. Check CORS headers on your server (use `--cors` flag)
+4. Ensure bundle is in the correct format (check export structure)
+5. Verify server is still running
 
 ### API Calls Failing
 
@@ -573,9 +741,9 @@ Submit your plugin manifest to the portal registry (process TBD).
 **Solutions:**
 1. Check network tab in DevTools
 2. Verify endpoint URL is correct
-3. Check authentication (handled by portal)
-4. Verify request payload format
-5. Check backend logs
+3. For portal backend: Check authentication (handled by portal)
+4. For external APIs: Check CORS and API key
+5. Verify request payload format
 
 ### Build Errors
 
@@ -585,7 +753,7 @@ Submit your plugin manifest to the portal registry (process TBD).
 1. Check TypeScript errors: `npx tsc --noEmit`
 2. Verify all dependencies installed: `npm install`
 3. Clear cache: `rm -rf node_modules dist && npm install`
-4. Check esbuild config
+4. Check esbuild config matches template
 
 ### Styling Issues
 
@@ -593,10 +761,35 @@ Submit your plugin manifest to the portal registry (process TBD).
 
 **Solutions:**
 1. Verify Tailwind classes are correct
-2. Check theme-specific styles
+2. Check theme-specific styles using `context.theme.mode`
 3. Inspect element in DevTools
 4. Test in both light and dark modes
 5. Check for CSS conflicts
+
+### React Errors
+
+**Problem:** "React is not defined" error
+
+**Solution:** You're importing React instead of using global:
+```typescript
+// ❌ Wrong
+import React from 'react';
+
+// ✅ Correct
+declare const React: any;
+const { useState, useEffect } = React;
+```
+
+**Problem:** "Objects are not valid as a React child"
+
+**Solution:** You're trying to render an object. Check that you're rendering `theme.mode` not `theme`:
+```typescript
+// ❌ Wrong
+<p>Theme: {context.theme}</p>
+
+// ✅ Correct
+<p>Theme: {context.theme?.mode}</p>
+```
 
 ### Memory Leaks
 
@@ -620,5 +813,5 @@ Submit your plugin manifest to the portal registry (process TBD).
 
 - Review the [API Reference](./API_REFERENCE.md)
 - Explore [Example Plugins](../examples)
-- Join our developer community
 - Start building your first plugin!
+- Test your plugin using the "Test Your Plugin" feature in the portal

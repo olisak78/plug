@@ -1,0 +1,10 @@
+{
+  "id": "projects-plugin",
+  "name": "Projects Plugin",
+  "version": "1.0.0",
+  "description": "Display and browse available projects from the portal backend",
+  "author": "Oleg",
+  "bundleUrl": "http://localhost:8000/plugin.js",
+  "tags": ["projects", "data-visualization"],
+  "minPortalVersion": "1.0.0"
+}

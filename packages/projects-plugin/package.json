@@ -1,0 +1,24 @@
+{
+  "name": "projects-plugin",
+  "version": "1.0.0",
+  "description": "Display available projects from the portal backend",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "dev": "node esbuild.config.js --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["projects", "plugin"],
+  "author": "Oleg",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@sap-developer-portal/plugin-sdk": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.3.0"
+  }
+}
