@@ -10,6 +10,7 @@ Complete guide for developing plugins for the SAP Developer Portal.
 - [Testing Your Plugin](#testing-your-plugin)
 - [Plugin Context](#plugin-context)
 - [Building Your Plugin](#building-your-plugin)
+- [Backend Integration](#backend-integration)
 - [Publishing](#publishing)
 - [Best Practices](#best-practices)
 - [Troubleshooting](#troubleshooting)
@@ -207,37 +208,26 @@ This creates `dist/plugin.js` - your complete plugin bundle.
 
 ## Testing Your Plugin
 
+### Overview of Testing Modes
+
+The portal provides two testing modes:
+
+1. **Frontend Only**: Test your plugin's UI without backend integration
+2. **Full Stack**: Test your plugin with a local backend server
+
 ### Step 1: Serve Your Plugin Bundle
 
-After building your plugin, you need to make it accessible via HTTP. You have several options:
+After building your plugin, you need to make it accessible via HTTP.
 
-#### Option A: Using Node.js http-server (With CORS)
-```bash
-# Install http-server globally (one-time)
-npm install -g http-server
-
-# Navigate to dist directory
-cd dist
-
-# Start server with CORS enabled
-http-server -p 8000 --cors
-
-# Output:
-# Starting up http-server, serving ./
-# Available on:
-#   http://127.0.0.1:8000
-#   http://192.168.x.x:8000
-```
-
-**Note:** The `--cors` flag is important - it allows the portal to load your plugin from a different origin.
-
-#### Option B: Using npx (No Installation)
+#### Option A: Using npx (No Installation)
 ```bash
 cd dist
 npx http-server -p 8000 --cors
 ```
 
-#### Option C: Using Your Machine's IP (For Testing on Other Devices)
+**Note:** The `--cors` flag is important - it allows the portal to load your plugin from a different origin.
+
+#### Option B: Using Your Machine's IP (For Testing Across Network)
 
 If you want to test on another machine or device on the same network:
 ```bash
@@ -258,6 +248,8 @@ http-server -p 8000 --cors
 
 ### Step 2: Test in the Portal
 
+#### Frontend Only Testing (No Backend)
+
 1. **Open the Developer Portal** in your browser:
 ```
    http://localhost:3000/plugins
@@ -265,24 +257,38 @@ http-server -p 8000 --cors
 
 2. **Use the "Test Your Plugin" Section:**
    - Find the "Test Your Plugin" card at the top of the page
-   - Enter your plugin bundle URL in the input field:
+   - Enter your plugin bundle URL:
 ```
      http://localhost:8000/plugin.js
 ```
-     Or if using your IP:
-```
-     http://10.26.182.201:8000/plugin.js
-```
+   - **Leave the backend URL empty** if your plugin doesn't need backend APIs
+   - Click **"Load Plugin"**
 
-3. **Click "Load Plugin"**
-   - Your plugin should load and render in the preview area below
-   - Check the browser console for any errors
-
-4. **Verify Plugin Functionality:**
+3. **Verify Plugin Functionality:**
    - Test all interactive features
-   - Switch between light/dark themes to test theme support
-   - Check that API calls work (if your plugin makes any)
-   - Verify error handling
+   - Switch between light/dark themes
+   - Check browser console for errors
+
+#### Full Stack Testing (With Backend)
+
+If your plugin uses `context.apiClient` to call backend APIs:
+
+1. **Start Your Plugin Backend** (see [Backend Integration](#backend-integration) section)
+
+2. **In the "Test Your Plugin" Section:**
+   - **Plugin Bundle URL**: `http://localhost:8000/plugin.js`
+   - **Plugin Backend URL**: `http://localhost:4000` (or your backend port)
+   - Click **"Load Plugin"**
+
+3. **Backend Proxy Active:**
+   - You'll see a blue message: "✓ Backend proxy active: http://localhost:4000"
+   - All `context.apiClient` calls will be proxied to your local backend
+   - The portal's authentication token is automatically included
+
+4. **Verify Full Stack:**
+   - Test API calls from your plugin
+   - Check backend console for incoming requests
+   - Verify data is loaded correctly
 
 ### Step 3: Development Iteration
 
@@ -300,6 +306,12 @@ cd my-awesome-plugin/dist
 http-server -p 8000 --cors
 ```
 
+**Terminal 3 - Backend (if needed):**
+```bash
+cd my-plugin-backend
+node server.js
+```
+
 **Browser - Portal:**
 1. Make changes to `src/index.tsx`
 2. Watch mode automatically rebuilds
@@ -308,7 +320,7 @@ http-server -p 8000 --cors
 
 ### Common Testing Scenarios
 
-#### Testing on localhost
+#### Scenario 1: Testing Frontend Only (No Backend)
 ```bash
 # Build plugin
 npm run build
@@ -317,11 +329,28 @@ npm run build
 cd dist
 http-server -p 8000 --cors
 
-# In portal, enter:
-http://localhost:8000/plugin.js
+# In portal "Test Your Plugin":
+# Plugin Bundle URL: http://localhost:8000/plugin.js
+# Plugin Backend URL: (leave empty)
 ```
 
-#### Testing across network (e.g., from a VM or another computer)
+#### Scenario 2: Testing with Local Backend
+```bash
+# Terminal 1 - Backend
+cd my-plugin-backend
+node server.js
+# Running on http://localhost:4000
+
+# Terminal 2 - Frontend bundle
+cd my-plugin/dist
+http-server -p 8000 --cors
+
+# In portal "Test Your Plugin":
+# Plugin Bundle URL: http://localhost:8000/plugin.js
+# Plugin Backend URL: http://localhost:4000
+```
+
+#### Scenario 3: Testing Across Network
 ```bash
 # Find your IP (example: 10.26.182.201)
 ifconfig | grep "inet "
@@ -330,19 +359,9 @@ ifconfig | grep "inet "
 cd dist
 http-server -p 8000 --cors
 
-# In portal, enter:
-http://10.26.182.201:8000/plugin.js
-```
-
-#### Testing with different ports
-
-If port 8000 is busy:
-```bash
-# Use a different port
-http-server -p 3001 --cors
-
-# In portal, enter:
-http://localhost:3001/plugin.js
+# In portal "Test Your Plugin":
+# Plugin Bundle URL: http://10.26.182.201:8000/plugin.js
+# Plugin Backend URL: http://10.26.182.201:4000 (if using backend)
 ```
 
 ### Troubleshooting Testing Issues
@@ -357,6 +376,16 @@ has been blocked by CORS policy
 ```bash
 http-server -p 8000 --cors
 ```
+
+**Problem: Backend 401 Unauthorized**
+```
+GET http://localhost:4000/api/data 401 (Unauthorized)
+```
+
+**Solution:** The portal's authentication is working correctly. Make sure your backend:
+1. Accepts the `Authorization: Bearer <token>` header
+2. Has CORS configured to accept credentials
+3. Is running and accessible
 
 **Problem: Plugin Not Loading**
 
@@ -376,7 +405,7 @@ http-server -p 8000 --cors
 
 **Problem: "React is not defined"**
 
-**Solution:** You're likely importing React instead of using the global. Check your code:
+**Solution:** You're likely importing React instead of using the global:
 ```typescript
 // ❌ Wrong
 import React from 'react';
@@ -384,6 +413,17 @@ import React from 'react';
 // ✅ Correct
 declare const React: any;
 ```
+
+**Problem: Backend calls going to wrong URL**
+
+**Solution:** Check the console logs:
+```
+[PluginApiClient] Direct request: GET http://localhost:4000/api/data
+```
+Should show the correct backend URL. If showing portal backend instead, verify:
+1. Backend URL is entered in "Test Your Plugin" section
+2. Blue "Backend proxy active" message is displayed
+3. Browser was refreshed after entering backend URL
 
 ### Verifying Your Bundle
 
@@ -451,10 +491,11 @@ const MyPlugin = ({ context }) => {
   const fetchData = async () => {
     try {
       // This calls YOUR portal's backend
-      const data = await context.apiClient.get('/api/items');
+      // When testing locally with backend URL, proxies to your local backend
+      const data = await context.apiClient.get('/api/v1/projects');
       
       // POST request
-      const result = await context.apiClient.post('/api/items', {
+      const result = await context.apiClient.post('/api/v1/items', {
         name: 'New Item'
       });
       
@@ -474,7 +515,7 @@ const response = await fetch('https://api.example.com/data');
 const data = await response.json();
 
 // Portal backend - use context.apiClient
-const data = await context.apiClient.get('/api/portal-data');
+const data = await context.apiClient.get('/api/v1/data');
 ```
 
 ### Utilities
@@ -579,7 +620,7 @@ const MyPlugin = ({ context }) => {
   const handleAction = async () => {
     try {
       setError(null);
-      await fetch('https://api.example.com/action');
+      await context.apiClient.get('/api/data');
       context.utils.toast('Success!', 'success');
     } catch (err) {
       setError(err.message);
@@ -597,6 +638,238 @@ const MyPlugin = ({ context }) => {
       <button onClick={handleAction}>Do Action</button>
     </div>
   );
+};
+```
+
+## Backend Integration
+
+### When Do You Need a Backend?
+
+Your plugin needs backend integration if it:
+- Stores user-specific data
+- Requires authentication
+- Needs to access private/internal APIs
+- Performs server-side processing
+
+**You DON'T need a backend if:**
+- Your plugin only uses public external APIs
+- It's purely frontend (UI only)
+- It only displays data without persistence
+
+### Backend Architecture Options
+
+#### Option 1: Portal Backend Endpoints (Recommended)
+
+Create endpoints in the portal's backend that your plugin can call:
+```javascript
+// portal-backend/routes/plugins.js
+
+// Plugin-specific endpoint
+app.get('/api/v1/projects', authenticateUser, async (req, res) => {
+  try {
+    // Query database or external service
+    const projects = await db.query('SELECT * FROM projects');
+    res.json(projects);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/v1/favorites', authenticateUser, async (req, res) => {
+  try {
+    const { userId } = req.user;
+    const favorite = req.body;
+    
+    await db.query(
+      'INSERT INTO favorites (user_id, data) VALUES (?, ?)',
+      [userId, JSON.stringify(favorite)]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+**In your plugin:**
+```typescript
+const MyPlugin = ({ context }) => {
+  const fetchProjects = async () => {
+    // Calls portal backend in production
+    // Or local backend when testing with backend URL
+    const projects = await context.apiClient.get('/api/v1/projects');
+    return projects;
+  };
+};
+```
+
+### Creating a Local Backend for Testing
+
+#### Step 1: Create Backend Directory
+```bash
+mkdir my-plugin-backend
+cd my-plugin-backend
+npm init -y
+npm install express cors
+```
+
+#### Step 2: Create Backend Server
+
+Create `server.js`:
+```javascript
+const express = require('express');
+const cors = require('cors');
+const app = express();
+
+// Enable CORS for portal
+app.use(cors({
+  origin: 'http://localhost:3000', // Portal URL
+  credentials: true
+}));
+
+app.use(express.json());
+
+// Middleware to verify authorization header (optional for local testing)
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({ 
+      error: 'Authorization header is required' 
+    });
+  }
+  
+  // In production, verify the JWT token here
+  // For local testing, we'll accept any token
+  console.log('Auth header:', authHeader);
+  next();
+};
+
+// Your plugin endpoints
+app.get('/api/v1/projects', authenticate, (req, res) => {
+  console.log('[Backend] GET /api/v1/projects');
+  
+  // Mock data
+  const projects = [
+    {
+      id: '1',
+      name: 'project-1',
+      title: 'Project One',
+      description: 'First project'
+    },
+    {
+      id: '2',
+      name: 'project-2',
+      title: 'Project Two',
+      description: 'Second project'
+    }
+  ];
+  
+  res.json(projects);
+});
+
+app.post('/api/v1/favorites', authenticate, (req, res) => {
+  console.log('[Backend] POST /api/v1/favorites', req.body);
+  
+  // Mock saving
+  res.json({ 
+    success: true,
+    id: Date.now(),
+    ...req.body
+  });
+});
+
+const PORT = 4000;
+app.listen(PORT, () => {
+  console.log(`Plugin backend running on http://localhost:${PORT}`);
+  console.log('Ready to accept requests from portal');
+});
+```
+
+#### Step 3: Test Backend Locally
+```bash
+# Start backend
+node server.js
+
+# In another terminal, test it
+curl http://localhost:4000/api/v1/projects \
+  -H "Authorization: Bearer test-token"
+
+# Should return JSON data
+```
+
+### Full Stack Testing Workflow
+
+**Terminal 1 - Backend:**
+```bash
+cd my-plugin-backend
+node server.js
+# Output: Plugin backend running on http://localhost:4000
+```
+
+**Terminal 2 - Frontend Bundle:**
+```bash
+cd my-plugin/dist
+http-server -p 8000 --cors
+```
+
+**Terminal 3 - Watch Mode (optional):**
+```bash
+cd my-plugin
+npm run dev
+```
+
+**Portal:**
+1. Navigate to `http://localhost:3000/plugins`
+2. In "Test Your Plugin":
+   - Plugin Bundle URL: `http://localhost:8000/plugin.js`
+   - Plugin Backend URL: `http://localhost:4000`
+3. Click "Load Plugin"
+4. Test API functionality
+
+**Console Output:**
+
+Plugin:
+```
+[Projects Plugin] Fetching projects from backend...
+[PluginApiClient] Using backend proxy: http://localhost:4000/api/v1/projects
+[PluginApiClient] Got auth token for direct request
+[PluginApiClient] Direct request: GET http://localhost:4000/api/v1/projects
+[Projects Plugin] Received projects: Array(2)
+```
+
+Backend:
+```
+Auth header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+[Backend] GET /api/v1/projects
+```
+
+### Authentication in Backend Proxy Mode
+
+When testing with a backend URL, the portal automatically:
+1. Fetches its authentication token
+2. Includes it in the `Authorization: Bearer <token>` header
+3. Sends it with every `context.apiClient` request
+
+**Your local backend should:**
+- Accept the `Authorization` header
+- Validate it (or skip validation for local testing)
+- Return data as usual
+```javascript
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer '
+  
+  // For local testing, accept any token
+  // In production, validate with JWT library
+  console.log('Authenticated with token:', token.substring(0, 20) + '...');
+  next();
 };
 ```
 
@@ -744,6 +1017,7 @@ Submit your plugin manifest to the portal registry (contact portal administrator
 3. For portal backend: Check authentication (handled by portal)
 4. For external APIs: Check CORS and API key
 5. Verify request payload format
+6. Check backend logs for detailed error messages
 
 ### Build Errors
 
@@ -791,6 +1065,32 @@ const { useState, useEffect } = React;
 <p>Theme: {context.theme?.mode}</p>
 ```
 
+### Backend Integration Issues
+
+**Problem:** Backend proxy not working
+
+**Solution:** Verify:
+1. Backend URL is entered in "Test Your Plugin" section
+2. Blue "Backend proxy active" message is displayed
+3. Backend server is running and accessible
+4. Check console for `[PluginApiClient]` logs
+
+**Problem:** 401 Unauthorized from backend
+
+**Solution:**
+1. Check that backend accepts `Authorization: Bearer <token>` header
+2. Verify CORS is configured with `credentials: true`
+3. Check backend logs to see if auth header is received
+4. For local testing, you can skip token validation
+
+**Problem:** API calls going to wrong endpoint
+
+**Solution:** Check console logs:
+```
+[PluginApiClient] Direct request: GET http://localhost:4000/api/v1/data
+```
+Should show your backend URL, not `/api/plugins/...`
+
 ### Memory Leaks
 
 **Problem:** Plugin causes performance issues
@@ -815,3 +1115,4 @@ const { useState, useEffect } = React;
 - Explore [Example Plugins](../examples)
 - Start building your first plugin!
 - Test your plugin using the "Test Your Plugin" feature in the portal
+- Try full-stack testing with a local backend server
